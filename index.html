@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Comprobante de Pago</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    @font-face {
+      font-family: 'Manrope';
+      src: url('Manrope-Medium.ttf') format('truetype');
+      font-weight: 500;
+      font-style: normal;
+    }
+    #datosComprobante, .comprobante * {
+      font-family: 'Manrope', sans-serif !important;
+    }
+  </style>
+  <!-- html2canvas CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+</head>
+<body>
+  <div class="formulario">
+    <h2>Generar Comprobante de Pago</h2>
+    <label>Nombre y Apellido:</label>
+    <input type="text" id="nombre" required>
+    <label>Valor:</label>
+    <input type="number" id="valor" required>
+    <label>Número de Teléfono:</label>
+    <input type="text" id="telefono" maxlength="10" required>
+    <button onclick="generarComprobante()">Generar Comprobante</button>
+  </div>
+
+  <!-- Comprobante oculto para renderizar -->
+  <div id="comprobante" class="comprobante" style="display:none; position:relative;">
+    <img id="plantilla-img" src="plantilla.png" alt="Plantilla de comprobante de pago para superposición de datos" style="display:block; width:100%; height:auto; position:absolute; left:0; top:0; z-index:0;">
+    <div id="datosComprobante" style="position:absolute; z-index:1; color:#200020; font-family:'Manrope', sans-serif; white-space:nowrap;">
+      <!-- Aquí se insertan los datos -->
+    </div>
+  </div>
+  <a id="descargar" style="display:none;"></a>
+  <script>
+    function toTitleCase(str) {
+      return str.replace(/\w\S*/g, function(txt){
+        return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+      });
+    }
+
+    function formatValor(valor) {
+      let num = Number(valor).toLocaleString('es-CO', {minimumFractionDigits:2, maximumFractionDigits:2});
+      return `$ ${num}`;
+    }
+
+    function formatTelefono(tel) {
+      tel = tel.replace(/\D/g, '').slice(0,10);
+      if (tel.length < 10) return tel;
+      return `${tel.substr(0,3)} ${tel.substr(3,3)} ${tel.substr(6,4)}`;
+    }
+
+    function fechaColombia() {
+      let now = new Date();
+      let utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+      let colombia = new Date(utc - (5 * 60 * 60000));
+      let meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+      let dia = colombia.getDate().toString().padStart(2,'0');
+      let mes = meses[colombia.getMonth()];
+      let año = colombia.getFullYear();
+      let hora = colombia.getHours();
+      let minutos = colombia.getMinutes().toString().padStart(2,'0');
+      let ampm = hora >= 12 ? 'p. m.' : 'a. m.';
+      hora = hora % 12;
+      if (hora === 0) hora = 12;
+      hora = hora.toString().padStart(2,'0');
+      return `${dia} de ${mes} de ${año} a las ${hora}:${minutos} ${ampm}`;
+    }
+
+    function generarReferencia() {
+      let num = Math.floor(1000000 + Math.random() * 9000000);
+      return `M1${num}`;
+    }
+
+    function generarComprobante() {
+      let nombre = document.getElementById('nombre').value.trim();
+      let valor = document.getElementById('valor').value.trim();
+      let telefono = document.getElementById('telefono').value.trim();
+
+      if (!nombre || !valor || !telefono || telefono.length !== 10 || isNaN(valor)) {
+        alert('Por favor, complete todos los campos correctamente.');
+        return;
+      }
+
+      let nombreFormateado = toTitleCase(nombre);
+      let valorFormateado = formatValor(valor);
+      let telefonoFormateado = formatTelefono(telefono);
+      let fecha = fechaColombia();
+      let referencia = generarReferencia();
+
+      // SOLO imprime el valor, sin el label
+      let html = `
+        <div style="position:absolute; left:74px; top:1036px; font-size:36px;">${nombreFormateado}</div>
+        <div style="position:absolute; left:74px; top:1174px; font-size:36px;">${valorFormateado}</div>
+        <div style="position:absolute; left:74px; top:1310px; font-size:36px;">${telefonoFormateado}</div>
+        <div style="position:absolute; left:74px; top:1449px; font-size:36px;">${fecha}</div>
+        <div style="position:absolute; left:74px; top:1582px; font-size:36px;">${referencia}</div>
+      `;
+
+      document.getElementById('datosComprobante').innerHTML = html;
+
+      // Mostrar comprobante oculto y remover los divs guía temporales
+      let comprobante = document.getElementById('comprobante');
+      let plantillaImg = document.getElementById('plantilla-img');
+
+      // Esperar a que la imagen se cargue completamente para obtener dimensiones originales
+      if (!plantillaImg.complete) {
+        plantillaImg.onload = proceedHtml2Canvas;
+      } else {
+        proceedHtml2Canvas();
+      }
+
+      function proceedHtml2Canvas() {
+        // Ajustar el comprobante al tamaño original de la plantilla
+        let width = plantillaImg.naturalWidth;
+        let height = plantillaImg.naturalHeight;
+        comprobante.style.width = width + "px";
+        comprobante.style.height = height + "px";
+        plantillaImg.style.width = width + "px";
+        plantillaImg.style.height = height + "px";
+
+        comprobante.style.display = 'block';
+
+        setTimeout(() => {
+          html2canvas(comprobante, {
+            backgroundColor: null,
+            scale: 1,
+            allowTaint: true,
+            useCORS: false,
+            logging: false,
+            width: width,
+            height: height
+          }).then(canvas => {
+            let link = document.getElementById('descargar');
+            link.href = canvas.toDataURL('image/png');
+            link.download = `comprobante_${referencia}.png`;
+            link.style.display = 'inline-block';
+            link.click();
+            comprobante.style.display = 'none';
+            link.style.display = 'none';
+          });
+        }, 150);
+      }
+    }
+  </script>
+</body>
+</html>
